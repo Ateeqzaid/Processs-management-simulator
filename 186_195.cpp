@@ -238,11 +238,87 @@ void firstComeFirstServe(vector<Process> processes, int numProcesses) {
         currentTime++;
     }
 }
+// Round Robin scheduling algorithm
+void roundRobin(vector<Process> processes, int numProcesses) {
+    int completedProcesses = 0;
+    int currentTime = 0;
+    int lastProcessId = 0;
+    vector<Process> readyQueue;
+    bool isContextSwitching = false;
+
+    while (completedProcesses != numProcesses) {
+        // Add arriving processes to the ready queue
+        for (auto it = processes.begin(); it != processes.end(); ) {
+            if (it->getArrivalTime() <= currentTime) {
+                readyQueue.push_back(*it);
+                cout << "[time " << it->getArrivalTime() << "ms] Process " << it->getProcessId() << " created (requires " << it->getBurstTime() << "ms CPU time)" << endl;
+                it = processes.erase(it);
+            } else {
+                ++it;
+            }
+        }
+
+        if (!readyQueue.empty()) {
+            if (isContextSwitching) {
+                cout << "[time " << currentTime - 7 << "ms] Context switch (swapped out process " << lastProcessId << " for process " << readyQueue[0].getProcessId() << ")" << endl;
+                currentTime += 7;
+                isContextSwitching = false;
+            }
+
+            // Process the first process in the ready queue for a time slice
+            if (!readyQueue[0].hasAccessedCPU()) {
+                int initialWait = currentTime - readyQueue[0].getArrivalTime();
+                readyQueue[0].markAsAccessed(initialWait);
+                total_initial_waiting_time += initialWait;
+                min_initial_waiting_time = min(min_initial_waiting_time, static_cast<double>(initialWait));
+                max_initial_waiting_time = max(max_initial_waiting_time, static_cast<double>(initialWait));
+                cout << "[time " << currentTime << "ms] Process " << readyQueue[0].getProcessId() << " accessed CPU for the first time (initial wait time " << readyQueue[0].getInitialWaitingTime() << "ms)" << endl;
+            }
+
+            // Execute for one time slice
+            int timeSlice = min(TIME_SLICE, readyQueue[0].getRemainingBurstTime());  // Process runs for TIME_SLICE or until burst is finished
+            readyQueue[0].decrementBurstTime();
+            currentTime += timeSlice;
+
+            if (readyQueue[0].getRemainingBurstTime() == 0) {
+                // Process finishes its execution
+                int turnaroundTime = currentTime - readyQueue[0].getArrivalTime();
+                int totalWaitTime = turnaroundTime - readyQueue[0].getBurstTime();
+                cout << "[time " << currentTime << "ms] Process " << readyQueue[0].getProcessId() << " completed its CPU burst (turnaround time " << turnaroundTime << "ms, initial wait time " << readyQueue[0].getInitialWaitingTime() << "ms, total wait time " << totalWaitTime << "ms)" << endl;
+
+                lastProcessId = readyQueue[0].getProcessId();
+                total_turnaround_time += turnaroundTime;
+                total_waiting_time += totalWaitTime;
+                min_waiting_time = min(min_waiting_time, static_cast<double>(totalWaitTime));
+                max_waiting_time = max(max_waiting_time, static_cast<double>(totalWaitTime));
+                min_turnaround_time = min(min_turnaround_time, static_cast<double>(turnaroundTime));
+                max_turnaround_time = max(max_turnaround_time, static_cast<double>(turnaroundTime));
+
+                readyQueue.erase(readyQueue.begin());
+                completedProcesses++;
+
+                if (!readyQueue.empty()) {
+                    cout << "[time " << currentTime << "ms] Context switch (swapped out process " << lastProcessId << " for process " << readyQueue[0].getProcessId() << ")" << endl;
+                    currentTime += CONTEXT_SWITCH_TIME;
+                } else {
+                    isContextSwitching = true;
+                    currentTime += 7;
+                }
+            } else {
+                // If process is not finished, put it back into the ready queue
+                readyQueue.push_back(readyQueue[0]);
+                readyQueue.erase(readyQueue.begin());
+            }
+        }
+        currentTime++;
+    }
+}
+
 
 // Other scheduling algorithms (SJF, SRTF, Round Robin, Priority) can be refactored similarly...
 
 int main() {
-    int numProcesses = 20;
+    int numProcesses = 10;
     srand(static_cast<unsigned>(time(0)));
     vector<Process> processes;
 
@@ -281,6 +357,11 @@ int main() {
     cout << "First Come First Serve:" << endl << endl;
     firstComeFirstServe(processes, numProcesses);
     printStatistics(numProcesses);
+    
+    cout << "Round Robin:" << endl << endl;
+roundRobin(processes, numProcesses);
+printStatistics(numProcesses);
+
 
     // Other scheduling algorithms can be called here...
 
